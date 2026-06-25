@@ -36,6 +36,7 @@ its own iterative improvement — autonomously.
 
 - TypeScript throughout. Run `npm run typecheck` (root + web) before committing.
 - Agent workspace lives at `~/.open-tag/agents/<agent-id>/` with a `MEMORY.md` per agent.
+- Screenshots / browser-verification captures go in `.shots/` (gitignored — never commit them).
 
 ## Parallel development (worktrees)
 
@@ -45,8 +46,8 @@ its own iterative improvement — autonomously.
   checkout stays on `main` (it's where prod runs). **Exception — trivial changes**
   (a doc edit, a one/two-line fix) may use a plain branch off `origin/main` in the main
   checkout; use judgment, don't spin up a worktree's whole DB+seed for a typo. A soft,
-  non-blocking reminder fires once per session when you edit on `main` in the main checkout
-  (`.claude/hooks/worktree-reminder.sh`, wired in `.claude/settings.json`).
+  non-blocking `SessionStart` reminder fires once per session when the session starts on `main`
+  in the main checkout (`.claude/hooks/worktree-reminder.sh`, wired in `.claude/settings.json`).
 - A `SessionStart` hook (`.claude/hooks/pull-main-on-session-start.sh`) keeps the main
   checkout's `main` fresh by **fast-forwarding** it to `origin/main` once per session —
   but only when it's a zero-risk FF: it skips inside a worktree, off `main`, on a dirty

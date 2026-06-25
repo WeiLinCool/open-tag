@@ -17,3 +17,6 @@ CLAUDE.local.md
 reference/
 recon/
 _vendor/
+
+# screenshots / browser-verification captures — local only
+.shots/
