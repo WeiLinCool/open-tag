@@ -186,8 +186,21 @@ export function Chat() {
   // (the live bar deep-links to Activity via ?agentTab=activity; without this it would stick across opens).
   const closeProfile = () => { setProfile(null); setSp((prev) => { const n = new URLSearchParams(prev); n.delete("agentTab"); return n; }, { replace: true }); };
 
+  // Channel-scoped state (loaded messages + load gate + has-more) belongs to one channel. When the
+  // channel changes, reset it *synchronously during render* (React's "adjust state when a prop changes"
+  // pattern) rather than in the effect below — effects run after paint, so resetting there leaves one
+  // painted frame (and the whole skeleton phase) showing the previous channel's messages. Resetting here
+  // makes the new channel paint its skeleton immediately, never the prior channel's stale list.
+  const [shownChannelId, setShownChannelId] = useState(cur?.id);
+  if (cur?.id !== shownChannelId) {
+    setShownChannelId(cur?.id);
+    setMsgs([]);
+    setLoaded(false);
+    setHasMore(false);
+  }
+
   useEffect(() => { if (!channelId && cur) nav(`/s/${slug}/channel/${cur.id}`, { replace: true }); }, [channelId, cur, slug, nav]);
-  useEffect(() => { if (!cur) return; setThread(null); setProfile(null); setLoaded(false); loadingOlderRef.current = false; prependRestoreRef.current = null; subscribeChannel(cur.id); (async () => { // switching channels closes any open thread + profile overlay from the previous channel (the live trace itself persists — accumulated in the store, see store.tsx); join the room while viewing so message:new arrives live (covers public non-member channels + channels relevant after connect)
+  useEffect(() => { if (!cur) return; setThread(null); setProfile(null); loadingOlderRef.current = false; prependRestoreRef.current = null; subscribeChannel(cur.id); (async () => { // switching channels closes any open thread + profile overlay from the previous channel (loaded/msgs/hasMore reset happens synchronously in the render-phase guard above) (the live trace itself persists — accumulated in the store, see store.tsx); join the room while viewing so message:new arrives live (covers public non-member channels + channels relevant after connect)
     const d = await api("GET", `/api/messages/channel/${cur.id}?limit=${PAGE_SIZE}`); const ms: Msg[] = d.messages || []; setMsgs(ms); setLoaded(true); setHasMore(!!d.hasMore); markRead(cur.id);
     const ids = ms.map((m) => m.id);
     if (ids.length) { try { setThreadMeta(await api("GET", `/api/channels/${cur.id}/threads?parentMessageIds=${ids.join(",")}`) || {}); } catch { setThreadMeta({}); } } else setThreadMeta({});
