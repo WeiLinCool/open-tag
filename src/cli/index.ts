@@ -53,7 +53,7 @@ message.command("check").description("non-blocking check for new messages").acti
   for (const m of d.messages) console.log(m.text);
   console.log("No more new messages."); // termination sentinel
 });
-message.command("send").description("send a message (body read from stdin); if new messages arrived since last read the message is freshness-held as a draft — revise it or use --send-draft to submit as-is").requiredOption("--target <target>", "#channel / dm:@name / #channel:shortid").option("--attach <ids>", "attachment ids, comma-separated").option("--send-draft", "submit the held draft as-is, bypassing freshness check").action(async (opts) => {
+message.command("send").description("send a message (body read from stdin); if new messages arrived since last read the message is freshness-held as a draft — revise it or use --send-draft to submit as-is").requiredOption("--target <target>", "#channel / dm:@name / #channel:shortid / thread:shortid").option("--attach <ids>", "attachment ids, comma-separated").option("--send-draft", "submit the held draft as-is, bypassing freshness check").action(async (opts) => {
   const sendDraft = !!opts.sendDraft;
   const content = sendDraft ? "" : (await readStdin()).trim();
   const attachmentIds = opts.attach ? String(opts.attach).split(",").map((s: string) => s.trim()).filter(Boolean) : [];
@@ -126,6 +126,15 @@ task.command("update").description("update task status (--message-id, or --chann
     await api("POST", "/agent-api/task/update", body);
     console.log(`Updated -> ${opts.status}`);
   });
+task.command("assign").description("hand off a task to another agent (--message-id, or --channel #ch --number N)")
+  .option("--message-id <id>").option("--channel <ch>", "#name / dm:@name (used with --number)").option("--number <n>", "task number #N")
+  .requiredOption("--to <agent>", "@agent handle").action(async (opts) => {
+    const body: Record<string, unknown> = { to: opts.to };
+    if (opts.number != null) { body.channel = opts.channel; body.number = Number(opts.number); } else body.messageId = opts.messageId;
+    const d = await api("POST", "/agent-api/task/assign", body);
+    console.log(`Assigned task #${d.number ?? "?"} -> @${d.to}`);
+    if (d.followUp) console.log(d.followUp);
+  });
 const taskCreate = async (opts: { channel: string; title: string }) => {
   const d = await api("POST", "/agent-api/task/new", { target: opts.channel, title: opts.title });
   for (const t of d.tasks ?? []) console.log(`Created task #${t.number ?? "-"} ${String(t.id).slice(0, 8)}: ${t.content}`);
@@ -149,7 +158,7 @@ thread.command("reply").description("start or reply to a thread under a message 
   const d = await api("POST", "/agent-api/thread/reply", { parent: opts.parent, channel: opts.channel, content });
   console.log(`Replied in thread (thread ${String(d.threadChannelId).slice(0, 8)}, msg ${String(d.id).slice(0, 8)})`);
 });
-thread.command("unfollow").description("stop receiving deliveries from a thread").requiredOption("--target <thread>", "#channel:shortid").action(async (opts) => {
+thread.command("unfollow").description("stop receiving deliveries from a thread").requiredOption("--target <thread>", "#channel:shortid or thread:shortid").action(async (opts) => {
   await api("POST", "/agent-api/thread/unfollow", { target: opts.target });
   console.log(`Unfollowed ${opts.target}`);
 });

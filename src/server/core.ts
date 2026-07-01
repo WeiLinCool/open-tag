@@ -446,6 +446,27 @@ export async function canAgentReadChannel(serverId: string, channelId: string, a
 
 export async function resolveTarget(serverId: string, target: string, selfAgentId: string): Promise<{ channelId: string; threadId: string | null } | null> {
   let t = target.trim();
+  if (t.startsWith("thread:")) {
+    const short = t.slice("thread:".length).trim();
+    if (!/^[0-9a-f]{6,}$/i.test(short)) return null;
+    const parent = (await db.select().from(schema.messages).where(and(
+      eq(schema.messages.serverId, serverId),
+      like(sql`${schema.messages.id}::text`, short.toLowerCase() + "%"),
+    )))[0];
+    if (!parent || parent.senderType === "system") return null;
+    const existing = (await db.select().from(schema.channels).where(and(
+      eq(schema.channels.serverId, serverId),
+      eq(schema.channels.type, "thread"),
+      eq(schema.channels.parentMessageId, parent.id),
+    )))[0];
+    if (existing) {
+      if (!(await canAgentReadChannel(serverId, existing.id, selfAgentId))) return null;
+      return { channelId: existing.id, threadId: null };
+    }
+    if (!(await canAgentReadChannel(serverId, parent.channelId, selfAgentId))) return null;
+    const th = await getOrCreateThread(serverId, parent.id, { type: "agent", id: selfAgentId });
+    return { channelId: th.id, threadId: null };
+  }
   let threadShort: string | null = null;
   const colon = t.lastIndexOf(":");
   if (colon > 0 && !t.slice(colon + 1).includes("@") && /^[0-9a-f]{6,}$/i.test(t.slice(colon + 1))) {
@@ -468,17 +489,29 @@ export async function resolveTarget(serverId: string, target: string, selfAgentI
     baseChannelId = ch?.id ?? null;
   }
   if (!baseChannelId) return null;
-  // Agent ACL: the agent may only resolve a channel it can access (public, a DM it just (g)ot, or a private it
-  // was added to). Blocks resolving a private channel by name the agent was never invited to. A DM is created
-  // above with the agent as a participant, so it always passes here.
-  if (!(await canAgentReadChannel(serverId, baseChannelId, selfAgentId))) return null;
   // 2) No thread suffix → base channel; has suffix → find parent message (short id prefix) → thread channel of that parent message
-  if (!threadShort) return { channelId: baseChannelId, threadId: null };
+  if (!threadShort) {
+    // Agent ACL: the agent may only resolve a base channel it can access (public, a DM it just got, or a private
+    // it was added to). This gate intentionally happens only for non-thread targets; existing thread membership
+    // is enough for the thread case below.
+    if (!(await canAgentReadChannel(serverId, baseChannelId, selfAgentId))) return null;
+    return { channelId: baseChannelId, threadId: null };
+  }
   const parent = (await db.select().from(schema.messages).where(and(eq(schema.messages.serverId, serverId), eq(schema.messages.channelId, baseChannelId), like(sql`${schema.messages.id}::text`, threadShort.toLowerCase() + "%"))))[0];
   // System messages ("X created task / claimed / moved …") are not real conversation anchors and have no
   // "open thread" affordance in the UI — threading onto one buries the reply where no one can reach it.
   // Reject so the caller surfaces a clear error instead of silently creating an unreachable thread.
   if (!parent || parent.senderType === "system") return null;
+  const existing = (await db.select().from(schema.channels).where(and(
+    eq(schema.channels.serverId, serverId),
+    eq(schema.channels.type, "thread"),
+    eq(schema.channels.parentMessageId, parent.id),
+  )))[0];
+  if (existing) {
+    if (!(await canAgentReadChannel(serverId, existing.id, selfAgentId))) return null;
+    return { channelId: existing.id, threadId: null };
+  }
+  if (!(await canAgentReadChannel(serverId, baseChannelId, selfAgentId))) return null;
   const th = await getOrCreateThread(serverId, parent.id, { type: "agent", id: selfAgentId });
   return { channelId: th.id, threadId: null };
 }
@@ -615,6 +648,76 @@ export async function unclaimTask(serverId: string, messageId: string, by?: { ty
   if (!upd) return null;
   await emitTaskUpdated(serverId, upd);
   await sysTaskMsg(serverId, upd.channelId, `${by ? await actorName(by.type, by.id) : "Someone"} released #${upd.taskNumber} "${taskTitle(upd.content)}"`, by);
+  return upd;
+}
+
+export async function assignTask(
+  serverId: string,
+  messageId: string,
+  assigneeId: string,
+  by?: { type: "user" | "agent"; id: string },
+) {
+  const target = (await db.select().from(schema.agents).where(and(
+    eq(schema.agents.id, assigneeId),
+    eq(schema.agents.serverId, serverId),
+    isNull(schema.agents.deletedAt),
+  )))[0];
+  if (!target) return null;
+
+  const cur = (await db.select().from(schema.messages).where(and(
+    eq(schema.messages.id, messageId),
+    eq(schema.messages.serverId, serverId),
+    isNotNull(schema.messages.taskStatus),
+  )))[0];
+  if (!cur) return null;
+
+  const nextStatus = cur.taskStatus === "todo" ? "in_progress" : cur.taskStatus;
+  const [upd] = await db.update(schema.messages)
+    .set({
+      taskStatus: nextStatus,
+      taskAssigneeType: "agent",
+      taskAssigneeId: assigneeId,
+      taskClaimedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(schema.messages.id, messageId),
+      eq(schema.messages.serverId, serverId),
+      isNotNull(schema.messages.taskStatus),
+    ))
+    .returning();
+  if (!upd) return null;
+
+  await emitTaskUpdated(serverId, upd);
+  const th = await getOrCreateThread(serverId, upd.id);
+  const threadCh = th.id;
+  if (!upd.threadId) {
+    await db.update(schema.messages).set({ threadId: threadCh }).where(eq(schema.messages.id, upd.id));
+    upd.threadId = threadCh;
+  }
+  await db.insert(schema.channelMembers).values({ channelId: threadCh, memberType: "agent", memberId: assigneeId }).onConflictDoNothing();
+
+  const actor = by ? await actorName(by.type, by.id) : "Someone";
+  const assigneeName = target.displayName || target.name;
+  const sysMsg = await sysTaskMsg(serverId, threadCh, `${actor} assigned #${upd.taskNumber} "${taskTitle(upd.content)}" to ${assigneeName}`, by);
+
+  const cfg = await agentConfig(assigneeId);
+  if (cfg) {
+    broadcastToDaemons(serverId, { type: "agent:start", agentId: assigneeId, config: cfg });
+    broadcastToDaemons(serverId, {
+      type: "agent:deliver",
+      agentId: assigneeId,
+      seq: sysMsg.seq,
+      from: actor,
+      target: threadCh,
+      targetName: `task #${upd.taskNumber}`,
+      msgShort: sysMsg.id.slice(0, 8),
+      isTask: true,
+      message: { content: `#${upd.taskNumber} assigned to you` },
+      mentioned: true,
+    });
+  }
+
   return upd;
 }
 
