@@ -32,7 +32,7 @@ export async function handleAgents(ctx: ServerCtx): Promise<boolean> {
     // names are excluded by the index predicate, so a deleted agent's name can be reused.
     const [agent] = await db.insert(schema.agents).values({
       serverId, name: b.name, displayName: b.displayName || b.name, description: b.description ?? null,
-      model: b.model || "sonnet", runtime: b.runtime || "claude", machineId: b.machineId ?? null,
+      model: b.model || null, runtime: b.runtime || "claude", machineId: b.machineId ?? null,
       runtimeConfig: { provider: b.provider ?? "default", model: b.model ?? null, reasoningEffort: b.reasoning ?? null, mode: b.fastMode ? "fast" : "default" },
       envVars: b.envVars ?? {}, executionMode: b.fastMode ? "fast" : "auto", creatorType: "user", creatorId: userId,
     }).onConflictDoNothing({ target: [schema.agents.serverId, schema.agents.name], where: isNull(schema.agents.deletedAt) }).returning();
@@ -95,7 +95,7 @@ export async function handleAgents(ctx: ServerCtx): Promise<boolean> {
     if (!a) return (sendErr(res, 404, "agent not found"), true);
     if (awsList) {
       const r = await requestDaemon(serverId, { type: "agent:workspace:list", agentId: agId });
-      return (sendJson(res, 200, r.error ? { error: r.error } : { files: r.files ?? [] }), true);
+      return (sendJson(res, 200, r.error ? { error: r.error } : { files: r.files ?? [], root: r.root }), true);
     }
     const r = await requestDaemon(serverId, { type: "agent:workspace:read", agentId: agId, path: url.searchParams.get("path") ?? "" });
     return (sendJson(res, 200, r.error ? { error: r.error } : { path: r.path, content: r.content }), true);
