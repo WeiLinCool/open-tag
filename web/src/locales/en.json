@@ -126,6 +126,8 @@
     "workspaceCode": "Code",
     "workspaceOpenLargePreview": "Open large preview",
     "workspacePreviewDialog": "Workspace file preview",
+    "workspaceEnterFullscreen": "Enter fullscreen",
+    "workspaceExitFullscreen": "Exit fullscreen",
     "nameRequired": "Name is required",
     "nameInvalid": "Name must be 1-64 characters, start with a letter, and contain only letters, numbers, hyphens, and underscores",
     "machineOnline": "online",

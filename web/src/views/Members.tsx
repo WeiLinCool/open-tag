@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MessageCircle, X, Wrench, ChevronRight, Check, Copy, Eye, EyeOff, Code2, Maximize2 } from "lucide-react";
+import { MessageCircle, X, Wrench, ChevronRight, Check, Copy, Eye, EyeOff, Code2, Maximize2, Minimize2 } from "lucide-react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -379,14 +379,13 @@ function ActivityTab({ id, name }: { id: string; name: string }) {
 }
 
 // Agent workspace file tree (GET /api/agents/:id/workspace-files for full tree + /workspace-files/read for file content)
-// .md files: Preview (rendered markdown, default) / Raw toggle. .html files: Visual sandbox preview / Raw toggle.
+// Previewable files open directly in the large rendered dialog; the narrow inline pane stays source-first.
 function WorkspaceTab({ id }: { id: string }) {
   const { t } = useTranslation();
   const { api } = useStore();
   const [files, setFiles] = useState<any[]>([]);
   const [err, setErr] = useState("");
   const [sel, setSel] = useState<{ path: string; content?: string; error?: string } | null>(null);
-  const [mode, setMode] = useState<"preview" | "raw">("raw"); // inline workspace view defaults to source; expanded dialog defaults to rendered preview
   const [previewMode, setPreviewMode] = useState<"preview" | "raw">("preview");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set()); // tracks expanded directories (collapsed by default, toggled via onToggleDir)
@@ -394,7 +393,15 @@ function WorkspaceTab({ id }: { id: string }) {
   const [showHidden, setShowHidden] = useState(false); // dot-prefixed files hidden by default (like ls; toggle for ls -a behavior)
 const [root, setRoot] = useState(`~/.open-tag/agents/${id}/`); // shown in root bar + copied by copy button; fallback (old daemon/offline) replaced by the real on-disk path from the API
   useEffect(() => { setSel(null); setExpanded(new Set()); setRoot(`~/.open-tag/agents/${id}/`); (async () => { const d = await api("GET", `/api/agents/${id}/workspace-files`); if (d.error) { setErr(d.error); setFiles([]); } else { setErr(""); setFiles(d.files || []); if (d.root) setRoot(d.root.endsWith("/") ? d.root : d.root + "/"); } })(); }, [id]);
-  const open = async (f: any) => { setMode("preview"); const d = await api("GET", `/api/agents/${id}/workspace-files/read?path=${encodeURIComponent(f.path)}`); setSel({ path: f.path, content: d.content, error: d.error }); };
+  const open = async (f: any) => {
+    const rich = /\.(md|html?)$/i.test(f.path);
+    setPreviewMode("preview");
+    setPreviewOpen(false);
+    setSel({ path: f.path });
+    const d = await api("GET", `/api/agents/${id}/workspace-files/read?path=${encodeURIComponent(f.path)}`);
+    setSel({ path: f.path, content: d.content, error: d.error });
+    if (rich && !d.error) setPreviewOpen(true);
+  };
   const toggleDir = (path: string) => setExpanded((s) => { const n = new Set(s); n.has(path) ? n.delete(path) : n.add(path); return n; });
   const copyRoot = () => navigator.clipboard?.writeText(root).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   // Collapse filter: a node is visible iff all its ancestor directories are expanded (top-level visible by default, subdirs collapsed)
@@ -402,7 +409,6 @@ const [root, setRoot] = useState(`~/.open-tag/agents/${id}/`); // shown in root 
   const isMd = !!sel && /\.md$/i.test(sel.path);
   const isHtml = !!sel && /\.html?$/i.test(sel.path);
   const canPreview = isMd || isHtml;
-  const modeLabel = isHtml ? { preview: t("members.workspaceVisual"), raw: t("members.workspaceCode") } : { preview: t("members.workspacePreview"), raw: t("members.workspaceRaw") };
   return (
     <div className="ws">
       <div className="ws-tree">
@@ -423,18 +429,13 @@ const [root, setRoot] = useState(`~/.open-tag/agents/${id}/`); // shown in root 
         {!sel ? <div className="hint">{t("members.workspaceHint")}</div>
           : sel.error ? <div className="empty">{sel.error}</div>
             : <>
-                <div className="ws-path"><span className="ws-path-text">{sel.path}</span>
-                  {canPreview && <span className="ws-toggle">
-                    <button className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")} title={modeLabel.preview}>{isHtml ? <Eye size={12} /> : null}{modeLabel.preview}</button>
-                    <button className={mode === "raw" ? "on" : ""} onClick={() => setMode("raw")} title={modeLabel.raw}>{isHtml ? <Code2 size={12} /> : null}{modeLabel.raw}</button>
+                <div className="ws-path">
+                  <span className="ws-path-text">{sel.path}</span>
+                  {canPreview && <span className="ws-actions">
+                    <button className="ws-expand" onClick={() => { setPreviewMode("preview"); setPreviewOpen(true); }} title={t("members.workspaceOpenLargePreview")} aria-label={t("members.workspaceOpenLargePreview")}><Maximize2 size={13} /></button>
                   </span>}
-                  {canPreview && <button className="ws-expand" onClick={() => { setPreviewMode("preview"); setPreviewOpen(true); }} title={t("members.workspaceOpenLargePreview")} aria-label={t("members.workspaceOpenLargePreview")}><Maximize2 size={13} /></button>}
                 </div>
-                {isMd && mode === "preview"
-                  ? <div className="ws-md"><ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeSanitize]}>{sel.content || ""}</ReactMarkdown></div>
-                  : isHtml && mode === "preview"
-                    ? <div className="ws-html"><HtmlRenderer html={sel.content || ""} trustLevel="untrusted" minHeight={520} /></div>
-                  : <pre className="ws-content">{sel.content}</pre>}
+                <pre className="ws-content">{sel.content}</pre>
                 {previewOpen && canPreview && <WorkspacePreviewModal sel={sel} mode={previewMode} setMode={setPreviewMode} onClose={() => setPreviewOpen(false)} />}
               </>}
       </div>
@@ -449,19 +450,21 @@ function WorkspacePreviewModal({ sel, mode, setMode, onClose }: {
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const [fullscreen, setFullscreen] = useState(false);
   useEscClose(onClose);
   const isMd = /\.md$/i.test(sel.path);
   const isHtml = /\.html?$/i.test(sel.path);
   const modeLabel = isHtml ? { preview: t("members.workspaceVisual"), raw: t("members.workspaceCode") } : { preview: t("members.workspacePreview"), raw: t("members.workspaceRaw") };
   return createPortal(
     <div className="modal-bg ws-preview-bg" role="dialog" aria-modal="true" aria-label={t("members.workspacePreviewDialog")} onClick={onClose}>
-      <div className="ws-preview-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={"ws-preview-modal" + (fullscreen ? " fullscreen" : "")} onClick={(e) => e.stopPropagation()}>
         <div className="ws-preview-head">
           <div className="ws-preview-title" title={sel.path}><span className="ws-path-text">{sel.path}</span></div>
           <span className="ws-toggle">
             <button className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")} title={modeLabel.preview}>{isHtml ? <Eye size={12} /> : null}{modeLabel.preview}</button>
             <button className={mode === "raw" ? "on" : ""} onClick={() => setMode("raw")} title={modeLabel.raw}>{isHtml ? <Code2 size={12} /> : null}{modeLabel.raw}</button>
           </span>
+          <button className="ws-preview-icon" onClick={() => setFullscreen((v) => !v)} title={fullscreen ? t("members.workspaceExitFullscreen") : t("members.workspaceEnterFullscreen")} aria-label={fullscreen ? t("members.workspaceExitFullscreen") : t("members.workspaceEnterFullscreen")}>{fullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button>
           <button className="ws-preview-close" onClick={onClose} aria-label={t("members.close")}><X size={18} /></button>
         </div>
         <div className="ws-preview-body">

@@ -126,6 +126,8 @@
     "workspaceCode": "代码",
     "workspaceOpenLargePreview": "打开大预览",
     "workspacePreviewDialog": "工作区文件预览",
+    "workspaceEnterFullscreen": "进入全屏",
+    "workspaceExitFullscreen": "退出全屏",
     "nameRequired": "Name 必填",
     "nameInvalid": "Name 必须为 1-64 个字符，以字母开头，且只能包含字母、数字、连字符和下划线",
     "machineOnline": "在线",
