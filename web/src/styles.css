@@ -222,6 +222,11 @@ main.content-col{display:flex;flex-direction:column;height:100vh;background:var(
    visibly the 320px thread panel. Pairs with .msg-col's min-width:0; does not affect explicit
    line breaks in code blocks. */
 .mbody{white-space:pre-wrap;color:var(--body);overflow-wrap:anywhere}
+
+/* Agent HTML output (iframe sandbox or DOMPurify rendered content): visual HTML from agent-generated reports/charts/dashboards.
+   Inherits .mbody base styling, adds border/background to distinguish HTML rendering area from markdown text. */
+.agent-html-output{white-space:normal;background:var(--surface-soft);border:1px solid var(--hair);border-radius:8px;margin:.3em 0;overflow:hidden}
+.agent-html-output iframe{width:100%;min-height:400px;border:none;display:block}
 /* Message body markdown (MessageContent .md): react-markdown+remark-breaks already structures line breaks, explicit white-space:normal overrides pre-wrap inherited from .mbody — otherwise consecutive blank lines/paragraphs are double-preserved and inflate height (diagnosed: .md inherits pre-wrap + p default 16px margin → 3 paragraphs = 176px). Paragraph/list spacing tightened for compact body; code blocks retain their own line breaks */
 .md{white-space:normal}
 .md > :first-child{margin-top:0}.md > :last-child{margin-bottom:0}
@@ -382,12 +387,13 @@ main.content-col{display:flex;flex-direction:column;height:100vh;background:var(
 .ptabs button{background:none;border:0;padding:10px 4px;margin-right:14px;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .ptabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
 .ws{flex:1;display:flex;min-height:0;overflow:hidden}
-.ws-tree{width:280px;flex:none;overflow:auto;box-shadow:1px 0 0 var(--hair);padding:10px 8px}
+.ws-tree{width:330px;flex:none;overflow:auto;box-shadow:1px 0 0 var(--hair);padding:10px 8px}
 .ws-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--body);font-family:var(--mono,ui-monospace,monospace)}
 .ws-row:hover{background:var(--surface-strong)}.ws-row.active{background:var(--surface-strong);color:var(--ink)}
 .ws-row .ws-size{font-size:11px;color:var(--muted-soft);flex:none}
-.ws-view{flex:1;overflow:auto;padding:18px 22px;min-width:0}
-.ws-path{font-size:12px;color:var(--muted);margin-bottom:10px;font-family:ui-monospace,monospace;display:flex;align-items:center;gap:10px}
+.ws-view{flex:1;overflow:auto;padding:18px 22px;min-width:400px}
+.ws-path{font-size:12px;color:var(--muted);margin-bottom:10px;font-family:ui-monospace,monospace;display:flex;align-items:center;gap:10px;min-height:28px;flex-wrap:nowrap;overflow:visible;position:relative}
+.ws-path-text{flex:1 1 auto;min-width:0;max-width:calc(100% - 220px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .ws-content{margin:0;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:var(--ink)}
 .ws-row .ws-mem{font-weight:700;color:var(--ink)}
 /* Workspace root path bar + copy (font-mono path + Copy path) + folder collapse caret */
@@ -398,9 +404,12 @@ main.content-col{display:flex;flex-direction:column;height:100vh;background:var(
 .ws-caret{color:var(--muted-soft);transition:transform var(--dur-fast) var(--ease-quint)}
 .ws-caret.open{transform:rotate(90deg)}
 /* .md Preview/Raw toggle (editorial pill) */
-.ws-toggle{margin-left:auto;display:inline-flex;border:1px solid var(--hair-strong);border-radius:9999px;overflow:hidden}
-.ws-toggle button{border:none;background:var(--surface);color:var(--muted);font-size:11px;font-weight:600;padding:2px 10px;cursor:pointer;font-family:var(--sans)}
+.ws-toggle{margin-left:auto;display:inline-flex;border:1px solid var(--hair-strong);border-radius:9999px;overflow:hidden;flex:0 0 auto;z-index:1;position:relative}
+.ws-toggle button{border:none;background:var(--surface);color:var(--muted);font-size:12px;font-weight:600;padding:4px 12px;cursor:pointer;font-family:var(--sans);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;min-height:28px}
 .ws-toggle button.on{background:var(--ink);color:var(--on-ink)}
+.ws-toggle button svg{flex:none}
+.ws-expand{flex:0 0 auto;border:1px solid var(--hair-strong);background:var(--surface);color:var(--muted);cursor:pointer;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;margin-left:10px;z-index:1;position:relative}
+.ws-expand:hover{background:var(--surface-strong);color:var(--ink)}
 /* Workspace .md rendering (reuses editorial typography, file viewer: no @ mention links) */
 .ws-md{font-size:14px;line-height:1.65;color:var(--body);max-width:760px}
 .ws-md h1,.ws-md h2,.ws-md h3{font-family:var(--serif);color:var(--ink);line-height:1.25;margin:1.1em 0 .4em}
@@ -413,6 +422,20 @@ main.content-col{display:flex;flex-direction:column;height:100vh;background:var(
 .ws-md blockquote{border-left:1px solid var(--hair-strong);margin:.6em 0;padding-left:12px;color:var(--muted)}
 .ws-md table{border-collapse:collapse;margin:.6em 0}.ws-md th,.ws-md td{border:1px solid var(--hair-strong);padding:4px 10px;font-size:.92em}
 .ws-md hr{border:none;border-top:1px solid var(--hair);margin:1em 0}
+.ws-html{background:#fff;border:1px solid var(--hair);border-radius:8px;overflow:hidden;min-height:520px}
+.ws-html iframe{display:block;width:100%}
+.ws-preview-bg{z-index:90;align-items:center;padding:24px}
+.ws-preview-modal{width:min(1230px,94vw);height:min(860px,90vh);background:var(--surface);border:1px solid var(--hair-strong);border-radius:14px;box-shadow:0 16px 54px var(--shadow-7);display:flex;flex-direction:column;overflow:hidden;animation:modal-enter var(--dur-slow) var(--ease-quint)}
+.ws-preview-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--hair);background:var(--canvas)}
+.ws-preview-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,monospace;font-size:13px;color:var(--ink)}
+.ws-preview-head .ws-toggle{margin-left:0}
+.ws-preview-close{flex:none;width:34px;height:34px;border:1px solid var(--hair-strong);border-radius:10px;background:var(--surface);color:var(--ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.ws-preview-close:hover{background:var(--surface-strong)}
+.ws-preview-body{flex:1;min-height:0;overflow:auto;padding:18px;background:var(--surface)}
+.ws-md-large{max-width:860px;margin:0 auto;font-size:16px}
+.ws-html-large{min-height:100%;height:100%}
+.ws-html-large iframe{height:100% !important;min-height:100%}
+.ws-content-large{min-width:max-content}
 .kv{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:6px}.kv b{color:var(--muted);font-weight:600;min-width:88px;flex:none}
 .kv-v{display:inline-flex;align-items:center;gap:6px}
 /* .empty: inline placeholder for sidebar lists / sub-section bodies. Uses --muted (not --muted-soft) so
@@ -834,6 +857,14 @@ aside.traj-col.profile-mode .scroll{flex:1;min-height:0;overflow:auto;margin:0 -
   /* Modal → full-width bottom sheet */
   .modal-bg{align-items:flex-end}
   .modal{width:100%;max-width:100%;border-radius:16px 16px 0 0}
+  .ws-preview-bg{align-items:stretch;padding:0}
+  .ws-preview-modal{width:100%;height:100dvh;max-height:none;border-radius:0;border:0}
+  .ws-preview-head{padding:10px 12px;flex-wrap:wrap}
+  .ws-preview-title{flex-basis:100%;order:2}
+  .ws-preview-head .ws-toggle{order:1}
+  .ws-preview-close{order:1;margin-left:auto}
+  .ws-preview-body{padding:12px}
+  .ws-md-large{font-size:15px}
   /* Enlarge touch targets */
   .joinbtn{padding:6px 11px;font-size:13px}
   .addbtn{width:30px;height:30px}
