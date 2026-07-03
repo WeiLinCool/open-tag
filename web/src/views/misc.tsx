@@ -359,10 +359,54 @@ function AccountSettings({ api }: { api: any }) {
   const { t, i18n } = useTranslation();
   const setLang = (l: string) => { i18n.changeLanguage(l); localStorage.setItem("open-tag.lang", l); };
   const [u, setU] = useState<any>(null);
+  const [wechat, setWechat] = useState<any>(null);
+  const [wechatCode, setWechatCode] = useState("");
+  const [wechatInput, setWechatInput] = useState("");
+  const [wechatMsg, setWechatMsg] = useState("");
+  const [wechatBusy, setWechatBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  useEffect(() => { (async () => setU(await api("GET", "/api/auth/me")))(); }, []);
+  useEffect(() => { (async () => {
+    setU(await api("GET", "/api/auth/me"));
+    const b = await api("GET", "/api/auth/wechat-binding").catch(() => ({ binding: null }));
+    setWechat(b?.binding ?? null);
+  })(); }, []);
   if (!u) return <div className="empty">{t("misc.accountLoading")}</div>;
   const save = async () => { await api("PATCH", "/api/auth/me", { displayName: u.displayName, description: u.description }); setSaved(true); setTimeout(() => setSaved(false), 1500); };
+  const requestWechatCode = async () => {
+    setWechatBusy(true); setWechatMsg("");
+    try {
+      const r = await api("POST", "/api/auth/wechat-binding/code", {});
+      setWechatCode(r.code || "");
+      setWechatMsg(t("misc.wechatBindingCodeReady"));
+    } catch (e: any) {
+      setWechatMsg(String(e?.message || e));
+    } finally { setWechatBusy(false); }
+  };
+  const confirmWechatCode = async (raw: string) => {
+    const code = raw.trim().toUpperCase().replace(/\s+/g, "");
+    setWechatInput(raw);
+    if (code.length < 8 || wechatBusy) return;
+    setWechatBusy(true); setWechatMsg("");
+    try {
+      const r = await api("POST", "/api/auth/wechat-binding/confirm", { code });
+      setWechat(r.binding ?? null);
+      setWechatCode("");
+      setWechatInput("");
+      setWechatMsg(t("misc.wechatBindingBound"));
+    } catch (e: any) {
+      setWechatMsg(String(e?.message || e));
+    } finally { setWechatBusy(false); }
+  };
+  const unlinkWechat = async () => {
+    setWechatBusy(true); setWechatMsg("");
+    try {
+      await api("DELETE", "/api/auth/wechat-binding");
+      setWechat(null);
+      setWechatMsg(t("misc.wechatBindingUnlinked"));
+    } catch (e: any) {
+      setWechatMsg(String(e?.message || e));
+    } finally { setWechatBusy(false); }
+  };
   return (
     <div className="setform">
       <label>{t("misc.accountDisplayName")}</label><input value={u.displayName || ""} onChange={(e) => setU({ ...u, displayName: e.target.value })} />
@@ -371,6 +415,16 @@ function AccountSettings({ api }: { api: any }) {
       <div className="ta-count">{(u.description || "").length}/3000</div>
       <label>{t("misc.accountEmail")}</label><input value={u.email || ""} disabled />
       <div className="setrow"><button className="ok" onClick={save}>{t("misc.accountSave")}</button>{saved && <span className="saved">{t("misc.accountSaved")}</span>}</div>
+      <div className="logout-row">
+        <div>
+          <div className="logout-title">{t("misc.wechatBindingTitle")}</div>
+          <div className="logout-desc">{wechat ? t("misc.wechatBindingBoundDesc", { id: wechat.externalUserId }) : t("misc.wechatBindingDesc")}</div>
+          {wechatCode && <div className="kv">{t("misc.wechatBindingCodeLabel")}: <b>{wechatCode}</b></div>}
+          {wechatMsg && <div className="kv">{wechatMsg}</div>}
+          {!wechat && <input value={wechatInput} disabled={wechatBusy} onChange={(e) => confirmWechatCode(e.target.value)} placeholder={t("misc.wechatBindingInputPlaceholder")} style={{ marginTop: 8 }} />}
+        </div>
+        <button className={wechat ? "logout-btn" : "ghost"} disabled={wechatBusy} onClick={wechat ? unlinkWechat : requestWechatCode}>{wechat ? t("misc.wechatBindingUnlink") : t("misc.wechatBindingGenerate")}</button>
+      </div>
       <div className="lang-row">
         <div><div className="logout-title">{t("settings.language")}</div><div className="logout-desc">{t("settings.languageDesc")}</div></div>
         <div className="seg-pill" role="group" aria-label={t("settings.language")}>

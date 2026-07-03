@@ -4,10 +4,19 @@
 import { nextSeq } from "../redis.js";
 import { emitMapped } from "./socketio.js";
 
+const observers = new Set<(serverId: string, event: unknown) => void>();
+
 export function initRealtime(): void { /* socket.io is attached in index.ts, no redis fan-out needed */ }
 
 export async function publish(serverId: string, event: unknown): Promise<void> {
   emitMapped(serverId, event);
+  for (const cb of observers) {
+    try { cb(serverId, event); } catch { /* ignore observer failures */ }
+  }
+}
+
+export function registerRealtimeObserver(cb: (serverId: string, event: unknown) => void): void {
+  observers.add(cb);
 }
 
 export { nextSeq };

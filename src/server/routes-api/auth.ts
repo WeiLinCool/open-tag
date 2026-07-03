@@ -6,6 +6,7 @@ import { devLoginEnabled, hashPassword, isValidEmail, passwordError, safeEqual, 
 import { DESC_TOO_LONG, createServer, descTooLong } from "../core.js";
 import { REGISTER_RATE_LIMIT, REGISTER_RATE_WINDOW_MS, clientIp, rateLimit } from "../ratelimit.js";
 import { readJson, sendErr, sendJson } from "../util.js";
+import { confirmWeChatBinding, getWeChatBinding, mintWeChatBindingCode, unlinkWeChatBinding } from "../wechatBinding.js";
 
 export async function handlePublicAuth(ctx: BaseCtx): Promise<boolean> {
   const { req, res, url, method, p } = ctx;
@@ -131,6 +132,47 @@ export async function handleAuthedAuth(ctx: UserCtx): Promise<boolean> {
     if (Object.keys(patch).length) await db.update(schema.users).set(patch).where(eq(schema.users.id, userId));
     const u = (await db.select().from(schema.users).where(eq(schema.users.id, userId)))[0];
     return (sendJson(res, 200, { id: u!.id, name: u!.name, displayName: u!.displayName, email: u!.email, description: u!.description }), true);
+  }
+  if (p === "/api/auth/wechat-binding" && method === "GET") {
+    const binding = await getWeChatBinding(userId);
+    return (sendJson(res, 200, { binding: binding ? {
+      id: binding.id,
+      provider: binding.provider,
+      externalUserId: binding.externalUserId,
+      externalRoomId: binding.externalRoomId,
+      botId: binding.botId,
+      createdAt: binding.createdAt,
+    } : null }), true);
+  }
+  if (p === "/api/auth/wechat-binding/code" && method === "POST") {
+    const minted = await mintWeChatBindingCode(userId);
+    return (sendJson(res, 200, {
+      code: minted.code,
+      provider: minted.provider,
+      expiresAt: minted.expiresAt,
+    }), true);
+  }
+  if (p === "/api/auth/wechat-binding/confirm" && method === "POST") {
+    const b = await readJson(req);
+    try {
+      const binding = await confirmWeChatBinding(userId, String(b.code ?? ""));
+      return (sendJson(res, 200, {
+        binding: {
+          id: binding.id,
+          provider: binding.provider,
+          externalUserId: binding.externalUserId,
+          externalRoomId: binding.externalRoomId,
+          botId: binding.botId,
+          createdAt: binding.createdAt,
+        },
+      }), true);
+    } catch (e: any) {
+      return (sendErr(res, 400, String(e?.message ?? e)), true);
+    }
+  }
+  if (p === "/api/auth/wechat-binding" && method === "DELETE") {
+    const binding = await unlinkWeChatBinding(userId);
+    return (sendJson(res, 200, { ok: true, unlinked: !!binding }), true);
   }
   return false;
 }

@@ -16,6 +16,7 @@ import { reconcileMachinesOnBoot, startMachineSweeper } from "./machineLiveness.
 import { sendJson, sendErr } from "./util.js";
 import { createLogger } from "../log.js";
 import { shouldServeAppShell } from "./staticRoutes.js";
+import { handleWeChatWebhook } from "./wechatGateway.js";
 
 // ── Security headers (helmet) ────────────────────────────────────────────────
 // CSP, COEP, and CORP are disabled here: the Vite-built frontend uses inline
@@ -116,6 +117,7 @@ const server = http.createServer(async (req, res) => {
   res.on("finish", () => log.debug("req", { method, path: url.pathname, status: res.statusCode, ms: Date.now() - t0 }));
   try {
     if (url.pathname === "/health") return sendJson(res, 200, { ok: true, service: "open-tag", time: new Date().toISOString() });
+    if (await handleWeChatWebhook(req, res, url, method)) return;
     if (await handleAgentApi(req, res, url, method)) return;
     if (await handleApi(req, res, url, method)) return;
     const isRead = method === "GET" || method === "HEAD";

@@ -21,4 +21,6 @@
 | `agent_activity_log` | Agent activity timeline | serverId, agentId, ts (ms), kind (status/text/tool_start), activity, detail, text, toolName, toolInput |
 | `server_sidebar_prefs` | Per-user per-server sidebar preferences | (serverId, userId) PK, prefs (jsonb: pinned/sorted/hidden DMs) |
 | `saved_messages` | Saved messages / bookmarks (private, per member) | serverId, memberType/Id, messageId, createdAt (= savedAt); (member, message) unique; not broadcast |
+| `external_identity_codes` | Short-lived external account binding codes | userId, provider (`wechat_personal` for MVP), codeHash (unique), externalUserId/externalRoomId/botId (filled when the bot claims the code), expiresAt, usedAt |
+| `external_identities` | Active/revoked external account links | userId, provider, externalUserId, externalRoomId, botId, revokedAt; partial unique indexes enforce one active identity per provider user and one active provider binding per open-tag user |
 | `join_links` | Workspace invite links | serverId, token (unique, used in URL), createdByUserId, role (role granted on join, default member), maxUses (null = unlimited), useCount, expiresAt (null = permanent) |

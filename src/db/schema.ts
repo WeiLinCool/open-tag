@@ -238,6 +238,38 @@ export const savedMessages = pgTable("saved_messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({ uniq: uniqueIndex("saved_messages_uniq").on(t.memberType, t.memberId, t.messageId) }));
 
+// ── External identity bindings (personal WeChat MVP; provider-shaped for later Feishu/WeCom) ──
+export const externalIdentityCodes = pgTable("external_identity_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  provider: text("provider").notNull(),
+  codeHash: text("code_hash").notNull().unique(),
+  externalUserId: text("external_user_id"),
+  externalRoomId: text("external_room_id"),
+  botId: text("bot_id"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("external_identity_codes_user_idx").on(t.userId),
+  byProviderExternal: index("external_identity_codes_provider_external_idx").on(t.provider, t.externalUserId),
+}));
+
+export const externalIdentities = pgTable("external_identities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  provider: text("provider").notNull(),
+  externalUserId: text("external_user_id").notNull(),
+  externalRoomId: text("external_room_id"),
+  botId: text("bot_id"),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("external_identities_user_idx").on(t.userId),
+  activeProviderExternalUniq: uniqueIndex("external_identities_provider_external_uniq").on(t.provider, t.externalUserId).where(sql`${t.revokedAt} is null`),
+  activeUserProviderUniq: uniqueIndex("external_identities_user_provider_uniq").on(t.userId, t.provider).where(sql`${t.revokedAt} is null`),
+}));
+
 // ── Invite join links (POST /servers/:id/join-links) ──────
 export const joinLinks = pgTable("join_links", {
   id: uuid("id").defaultRandom().primaryKey(),
