@@ -3,20 +3,20 @@
 export interface ScopeDef { key: string; group: string; label: string; description: string; }
 
 export const SCOPES: ScopeDef[] = [
-  { key: "inbox:receive", group: "Notifications", label: "Receive inbox events", description: "Receive new inbox events; get woken by others'/agents' activity." },
-  { key: "server:read", group: "Server", label: "Read workspace info", description: "List channels, members, and agents (basic workspace info)." },
-  { key: "channel:read", group: "Channels", label: "View channel members", description: "View members of joined channels." },
-  { key: "channel:join", group: "Channels", label: "Join channels", description: "Join visible public channels." },
-  { key: "channel:leave", group: "Channels", label: "Leave channels", description: "Leave joined channels." },
-  { key: "thread:unfollow", group: "Threads", label: "Unfollow threads", description: "Stop receiving deliveries from a thread." },
-  { key: "message:read", group: "Messages", label: "Read messages", description: "View, read, search, and resolve messages." },
-  { key: "message:send", group: "Messages", label: "Send messages", description: "Send messages to channels, DMs, and threads." },
-  { key: "attachment:upload", group: "Attachments", label: "Upload attachments", description: "Upload files as message attachments." },
-  { key: "attachment:view", group: "Attachments", label: "View attachments", description: "Download and view attachments." },
-  { key: "task:read", group: "Tasks", label: "Read tasks", description: "List tasks on channel task boards." },
-  { key: "task:write", group: "Tasks", label: "Write tasks", description: "Create, claim, release, and update tasks." },
-  { key: "knowledge:read", group: "Knowledge", label: "Read knowledge", description: "Fetch topics from the agent knowledge base." },
-  { key: "action:prepare", group: "Action", label: "Prepare action cards", description: "Allow the agent to prepare quick-commit action cards." },
+  { key: "inbox:receive", group: "scopes.groupNotifications", label: "scopes.inboxReceiveLabel", description: "scopes.inboxReceiveDesc" },
+  { key: "server:read", group: "scopes.groupServer", label: "scopes.serverReadLabel", description: "scopes.serverReadDesc" },
+  { key: "channel:read", group: "scopes.groupChannels", label: "scopes.channelReadLabel", description: "scopes.channelReadDesc" },
+  { key: "channel:join", group: "scopes.groupChannels", label: "scopes.channelJoinLabel", description: "scopes.channelJoinDesc" },
+  { key: "channel:leave", group: "scopes.groupChannels", label: "scopes.channelLeaveLabel", description: "scopes.channelLeaveDesc" },
+  { key: "thread:unfollow", group: "scopes.groupThreads", label: "scopes.threadUnfollowLabel", description: "scopes.threadUnfollowDesc" },
+  { key: "message:read", group: "scopes.groupMessages", label: "scopes.messageReadLabel", description: "scopes.messageReadDesc" },
+  { key: "message:send", group: "scopes.groupMessages", label: "scopes.messageSendLabel", description: "scopes.messageSendDesc" },
+  { key: "attachment:upload", group: "scopes.groupAttachments", label: "scopes.attachmentUploadLabel", description: "scopes.attachmentUploadDesc" },
+  { key: "attachment:view", group: "scopes.groupAttachments", label: "scopes.attachmentViewLabel", description: "scopes.attachmentViewDesc" },
+  { key: "task:read", group: "scopes.groupTasks", label: "scopes.taskReadLabel", description: "scopes.taskReadDesc" },
+  { key: "task:write", group: "scopes.groupTasks", label: "scopes.taskWriteLabel", description: "scopes.taskWriteDesc" },
+  { key: "knowledge:read", group: "scopes.groupKnowledge", label: "scopes.knowledgeReadLabel", description: "scopes.knowledgeReadDesc" },
+  { key: "action:prepare", group: "scopes.groupAction", label: "scopes.actionPrepareLabel", description: "scopes.actionPrepareDesc" },
 ];
 export const ALL_SCOPE_KEYS = SCOPES.map((s) => s.key);
 const SCOPE_SET = new Set(ALL_SCOPE_KEYS);

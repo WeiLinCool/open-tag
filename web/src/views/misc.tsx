@@ -12,6 +12,8 @@ import { useConfirm, useEscClose } from "../ConfirmModal.tsx";
 import { useTranslation } from "react-i18next";
 import { daemonUpdateCommandTemplate, isDaemonUpdateAvailable } from "../machineUi.ts";
 
+declare const __OPEN_TAG_API_ORIGIN__: string;
+
 export function Tasks() {
   const { channels, slug } = useStore();
   const { channelId } = useParams(); // "server" = all channels; otherwise a specific channelId
@@ -357,11 +359,12 @@ export function Settings() {
 function AccountSettings({ api }: { api: any }) {
   const { logout } = useStore();
   const { t, i18n } = useTranslation();
+  const wechatGatewayPath = "/api/integrations/wechat/openclaw";
+  const wechatGatewayEndpoint = `${__OPEN_TAG_API_ORIGIN__}${wechatGatewayPath}`;
   const setLang = (l: string) => { i18n.changeLanguage(l); localStorage.setItem("open-tag.lang", l); };
   const [u, setU] = useState<any>(null);
   const [wechat, setWechat] = useState<any>(null);
-  const [wechatCode, setWechatCode] = useState("");
-  const [wechatInput, setWechatInput] = useState("");
+  const [wechatLogin, setWechatLogin] = useState<any>(null);
   const [wechatMsg, setWechatMsg] = useState("");
   const [wechatBusy, setWechatBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -370,29 +373,26 @@ function AccountSettings({ api }: { api: any }) {
     const b = await api("GET", "/api/auth/wechat-binding").catch(() => ({ binding: null }));
     setWechat(b?.binding ?? null);
   })(); }, []);
+  useEffect(() => {
+    if (!wechatLogin?.id || ["confirmed", "failed"].includes(wechatLogin.status)) return;
+    const timer = setInterval(async () => {
+      const r = await api("GET", `/api/auth/wechat-openclaw-login/${wechatLogin.id}`).catch(() => null);
+      if (r?.session) {
+        setWechatLogin(r.session);
+        if (r.session.status === "confirmed") setWechatMsg("");
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [api, wechatLogin?.id, wechatLogin?.status]);
   if (!u) return <div className="empty">{t("misc.accountLoading")}</div>;
+  const wechatLoginConfirmed = wechatLogin?.status === "confirmed";
   const save = async () => { await api("PATCH", "/api/auth/me", { displayName: u.displayName, description: u.description }); setSaved(true); setTimeout(() => setSaved(false), 1500); };
-  const requestWechatCode = async () => {
+  const startWechatGatewayLogin = async () => {
     setWechatBusy(true); setWechatMsg("");
     try {
-      const r = await api("POST", "/api/auth/wechat-binding/code", {});
-      setWechatCode(r.code || "");
-      setWechatMsg(t("misc.wechatBindingCodeReady"));
-    } catch (e: any) {
-      setWechatMsg(String(e?.message || e));
-    } finally { setWechatBusy(false); }
-  };
-  const confirmWechatCode = async (raw: string) => {
-    const code = raw.trim().toUpperCase().replace(/\s+/g, "");
-    setWechatInput(raw);
-    if (code.length < 8 || wechatBusy) return;
-    setWechatBusy(true); setWechatMsg("");
-    try {
-      const r = await api("POST", "/api/auth/wechat-binding/confirm", { code });
-      setWechat(r.binding ?? null);
-      setWechatCode("");
-      setWechatInput("");
-      setWechatMsg(t("misc.wechatBindingBound"));
+      const r = await api("POST", "/api/auth/wechat-openclaw-login", {});
+      setWechatLogin(r.session ?? null);
+      setWechatMsg(t("misc.wechatBindingWaitingQr", { endpoint: wechatGatewayEndpoint }));
     } catch (e: any) {
       setWechatMsg(String(e?.message || e));
     } finally { setWechatBusy(false); }
@@ -418,12 +418,17 @@ function AccountSettings({ api }: { api: any }) {
       <div className="logout-row">
         <div>
           <div className="logout-title">{t("misc.wechatBindingTitle")}</div>
-          <div className="logout-desc">{wechat ? t("misc.wechatBindingBoundDesc", { id: wechat.externalUserId }) : t("misc.wechatBindingDesc")}</div>
-          {wechatCode && <div className="kv">{t("misc.wechatBindingCodeLabel")}: <b>{wechatCode}</b></div>}
-          {wechatMsg && <div className="kv">{wechatMsg}</div>}
-          {!wechat && <input value={wechatInput} disabled={wechatBusy} onChange={(e) => confirmWechatCode(e.target.value)} placeholder={t("misc.wechatBindingInputPlaceholder")} style={{ marginTop: 8 }} />}
+          <div className="logout-desc">{wechat ? t("misc.wechatBindingBoundDesc", { id: wechat.externalNickname || wechat.externalUserId }) : t("misc.wechatBindingDesc")}</div>
+          {!wechat && wechatLogin && <div style={{ marginTop: 10, display: "grid", gap: 8, maxWidth: 420 }}>
+            <div className="kv"><b>{t("misc.wechatBindingSessionLabel")}</b> {t(`misc.wechatBindingStatus_${wechatLogin.status}`, { defaultValue: wechatLogin.status })}</div>
+            {!wechatLoginConfirmed && wechatLogin.qrDataUrl && <img src={wechatLogin.qrDataUrl} alt={t("misc.wechatBindingQrAlt")} style={{ width: 220, height: 220, border: "1px solid var(--hair-strong)", borderRadius: 8, objectFit: "contain" }} />}
+            {!wechatLoginConfirmed && !wechatLogin.qrDataUrl && <div className="kv">{t("misc.wechatBindingWaitingQr", { endpoint: wechatGatewayEndpoint })}</div>}
+            {wechatLoginConfirmed && <div className="kv">{t("misc.wechatBindingConnected", { endpoint: wechatGatewayEndpoint })}</div>}
+            {wechatLogin.error && <div className="form-err">{wechatLogin.error}</div>}
+          </div>}
+          {wechatMsg && !wechatLoginConfirmed && <div className="kv">{wechatMsg}</div>}
         </div>
-        <button className={wechat ? "logout-btn" : "ghost"} disabled={wechatBusy} onClick={wechat ? unlinkWechat : requestWechatCode}>{wechat ? t("misc.wechatBindingUnlink") : t("misc.wechatBindingGenerate")}</button>
+        <button className={wechat ? "logout-btn" : "ghost"} disabled={wechatBusy} onClick={wechat ? unlinkWechat : startWechatGatewayLogin}>{wechat ? t("misc.wechatBindingUnlink") : t("misc.wechatBindingConnect")}</button>
       </div>
       <div className="lang-row">
         <div><div className="logout-title">{t("settings.language")}</div><div className="logout-desc">{t("settings.languageDesc")}</div></div>

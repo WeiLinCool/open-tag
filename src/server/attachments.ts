@@ -33,6 +33,17 @@ export function sanitizeMimeType(declared: string): string {
   return "application/octet-stream";
 }
 
+function decodeMultipartFilename(name: string): string {
+  // busboy surfaces multipart header bytes as a latin1 string; re-decoding as UTF-8 restores
+  // filenames like "报告-测试.html" that would otherwise become mojibake.
+  try {
+    const decoded = Buffer.from(name, "latin1").toString("utf8").trim();
+    return decoded || name || "file";
+  } catch {
+    return name || "file";
+  }
+}
+
 export function parseUpload(req: IncomingMessage): Promise<{ fields: Record<string, string>; files: UploadedFile[] }> {
   return new Promise((resolve, reject) => {
     let bb: ReturnType<typeof Busboy>;
@@ -50,8 +61,9 @@ export function parseUpload(req: IncomingMessage): Promise<{ fields: Record<stri
       // on Node ≥15). The error is remembered and surfaced once, after close.
       pending.push((async () => {
         try {
-          const { key, size } = await saveObject(info.filename || "file", stream);
-          files.push({ filename: info.filename || "file", mimeType: sanitizeMimeType(info.mimeType || "application/octet-stream"), size, storageKey: key });
+          const filename = decodeMultipartFilename(info.filename || "file");
+          const { key, size } = await saveObject(filename, stream);
+          files.push({ filename, mimeType: sanitizeMimeType(info.mimeType || "application/octet-stream"), size, storageKey: key });
         } catch (e) {
           stream.resume(); // drain any unconsumed bytes so busboy can finish and emit "close"
           firstError ??= e;

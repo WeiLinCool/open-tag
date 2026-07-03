@@ -155,6 +155,30 @@ export const messageMentions = pgTable("message_mentions", {
   byMention: index("mentions_target_idx").on(t.mentionType, t.mentionId),
 }));
 
+// External channel delivery context: maps an open-tag message/task/thread root back to the
+// platform conversation that originated it (WeChat MVP; Feishu/WeCom/etc. reuse the same shape).
+export const externalDeliveryContexts = pgTable("external_delivery_contexts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  serverId: uuid("server_id").notNull().references(() => servers.id),
+  channelId: uuid("channel_id").notNull().references(() => channels.id),
+  sourceMessageId: uuid("source_message_id").notNull().references(() => messages.id),
+  taskMessageId: uuid("task_message_id").references(() => messages.id),
+  platform: text("platform").notNull(),            // wechat | feishu | wecom | ...
+  adapter: text("adapter").notNull(),              // openclaw-weixin | feishu-bot | ...
+  externalBotId: text("external_bot_id").notNull(),
+  externalConversationId: text("external_conversation_id").notNull(),
+  externalUserId: text("external_user_id").notNull(),
+  replyToExternalUserId: text("reply_to_external_user_id"),
+  contextToken: text("context_token"),
+  status: text("status").default("open").notNull(), // open | done | failed
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  bySourceMessage: uniqueIndex("external_delivery_source_msg_uniq").on(t.sourceMessageId),
+  byTaskMessage: index("external_delivery_task_msg_idx").on(t.taskMessageId),
+  byConversation: index("external_delivery_conversation_idx").on(t.platform, t.externalConversationId),
+}));
+
 export const reactions = pgTable("reactions", {
   id: uuid("id").defaultRandom().primaryKey(),
   messageId: uuid("message_id").notNull().references(() => messages.id),
@@ -255,6 +279,28 @@ export const externalIdentityCodes = pgTable("external_identity_codes", {
   byProviderExternal: index("external_identity_codes_provider_external_idx").on(t.provider, t.externalUserId),
 }));
 
+export const wechatLoginSessions = pgTable("wechat_login_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  status: text("status").notNull().default("pending"),
+  adapterSessionId: text("adapter_session_id"),
+  qrPayload: text("qr_payload"),
+  qrDataUrl: text("qr_data_url"),
+  botId: text("bot_id"),
+  externalUserId: text("external_user_id"),
+  externalNickname: text("external_nickname"),
+  externalAvatarUrl: text("external_avatar_url"),
+  failureReason: text("failure_reason"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("wechat_login_sessions_user_idx").on(t.userId),
+  byStatus: index("wechat_login_sessions_status_idx").on(t.status),
+  byAdapterSession: index("wechat_login_sessions_adapter_session_idx").on(t.adapterSessionId),
+}));
+
 export const externalIdentities = pgTable("external_identities", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => users.id),
@@ -262,6 +308,8 @@ export const externalIdentities = pgTable("external_identities", {
   externalUserId: text("external_user_id").notNull(),
   externalRoomId: text("external_room_id"),
   botId: text("bot_id"),
+  externalNickname: text("external_nickname"),
+  externalAvatarUrl: text("external_avatar_url"),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({

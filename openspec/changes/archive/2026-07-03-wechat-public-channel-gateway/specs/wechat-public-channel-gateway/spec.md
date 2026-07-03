@@ -1,23 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: User can bind a personal WeChat identity from account settings
-The system MUST let a logged-in open-tag user generate a one-time binding code from account settings and bind a personal WeChat identity to that user through the web UI.
+### Requirement: Operator can connect a ClawBot/OpenClaw WeChat endpoint
+The system MUST expose a token-gated WeChat bot gateway endpoint that ClawBot/OpenClaw can use to pass messages into open-tag and poll status/result messages back out.
 
-#### Scenario: User generates a binding code
-- **WHEN** an authenticated user opens account settings and requests a WeChat binding code
-- **THEN** the system MUST create a short-lived single-use code tied to that user
+#### Scenario: Operator views the gateway endpoint
+- **WHEN** an authenticated user opens account settings
+- **THEN** the system MUST show the ClawBot/OpenClaw gateway endpoint instead of a personal account binding-code or QR-session flow
 
-#### Scenario: Bot claims the binding code
-- **WHEN** the personal WeChat bot receives the binding code from a WeChat user
-- **THEN** the system MUST record the WeChat user id on that pending code without completing the binding yet
+#### Scenario: Bot posts an inbound text command
+- **WHEN** ClawBot/OpenClaw posts a text message to `sendmessage`
+- **THEN** the gateway MUST parse the message as a WeChat bot command and route eligible explicit role commands into open-tag
 
-#### Scenario: User confirms the code
-- **WHEN** the user submits a valid unexpired binding code in the web UI
-- **THEN** the system MUST persist a personal-WeChat-to-open-tag-user binding
+#### Scenario: Bot polls outbound status
+- **WHEN** ClawBot/OpenClaw posts to `getupdates`
+- **THEN** the gateway MUST return queued text status/result messages in an OpenClaw-style response
 
-#### Scenario: Reuse is rejected
-- **WHEN** a code that has already been used or expired is submitted
-- **THEN** the system MUST reject the request and MUST NOT create or overwrite a binding
+#### Scenario: Unauthorized bot request is rejected
+- **WHEN** a ClawBot/OpenClaw request omits or sends the wrong gateway token
+- **THEN** the system MUST reject the request without exposing the endpoint
 
 ### Requirement: WeChat bot can post into the public channel
 The system MUST accept messages from a personal WeChat bot and route eligible messages into the open-tag `#all` public channel as standard channel content.

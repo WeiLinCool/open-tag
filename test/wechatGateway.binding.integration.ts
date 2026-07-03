@@ -5,7 +5,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
-import { mintWeChatBindingCode } from "../src/server/wechatBinding.ts";
+import { createWeChatLoginSession } from "../src/server/wechatBinding.ts";
 import { handleWeChatWebhook } from "../src/server/wechatGateway.ts";
 
 process.env.JWT_SECRET ??= "unit-test-jwt-secret-unit-test-jwt-secret-32";
@@ -20,11 +20,11 @@ let analystId = "";
 let createdAnalyst = false;
 const check = (label: string, cond: boolean) => { console.log(`  ${cond ? "✔" : "✗ FAIL"} ${label}`); if (!cond) failures++; };
 
-function makeReq(body: object, token = "wechat-test-token"): IncomingMessage {
-  const payload = JSON.stringify(body);
+function makeReq(body: object = {}, token = "wechat-test-token", method = "POST"): IncomingMessage {
+  const payload = method === "GET" ? "" : JSON.stringify(body);
   const readable = Readable.from([Buffer.from(payload)]);
   return Object.assign(readable, {
-    method: "POST",
+    method,
     headers: {
       "content-type": "application/json",
       "x-wechat-gateway-token": token,
@@ -46,10 +46,10 @@ function makeRes() {
   return { res, getStatus: () => status, getBody: () => body };
 }
 
-async function call(path: string, body: object) {
-  const req = makeReq(body);
+async function call(path: string, body: object = {}, method = "POST") {
+  const req = makeReq(body, "wechat-test-token", method);
   const { res, getStatus, getBody } = makeRes();
-  const ok = await handleWeChatWebhook(req, res, new URL(`http://localhost${path}?token=wechat-test-token`), "POST");
+  const ok = await handleWeChatWebhook(req, res, new URL(`http://localhost${path}?token=wechat-test-token`), method);
   let parsed: any = {};
   try { parsed = JSON.parse(getBody()); } catch { parsed = { raw: getBody() }; }
   return { ok, status: getStatus(), body: parsed };
@@ -78,7 +78,7 @@ async function setup() {
 
 async function cleanup() {
   await db.delete(schema.externalIdentities).where(eq(schema.externalIdentities.userId, ownerId));
-  await db.delete(schema.externalIdentityCodes).where(eq(schema.externalIdentityCodes.userId, ownerId));
+  await db.delete(schema.wechatLoginSessions).where(eq(schema.wechatLoginSessions.userId, ownerId));
   if (createdAnalyst && analystId) await db.delete(schema.agents).where(eq(schema.agents.id, analystId));
 }
 
@@ -99,19 +99,20 @@ async function main() {
   check("unbound is not accepted", unbound.body.accepted === false);
   check("unbound reason is explicit", unbound.body.reason === "unbound wechat user");
 
-  console.log("\n[2] bot can claim a web-generated binding code");
-  const minted = await mintWeChatBindingCode(ownerId);
-  const claim = await call("/api/integrations/wechat/bind", {
+  console.log("\n[2] adapter login event binds a scanned personal WeChat account");
+  const session = await createWeChatLoginSession(ownerId);
+  const pending = await call("/api/integrations/wechat/pending-sessions", {}, "GET");
+  check("adapter can discover pending sessions", pending.body.sessions?.some((s: any) => s.id === session.id));
+  const login = await call("/api/integrations/wechat/session-events", {
+    sessionId: session.id,
+    type: "login",
     botId: "wx_bot_001",
-    roomId: "room_binding",
-    userId: `wx_bound_${ts}`,
-    msgType: "text",
-    content: `#绑定 ${minted.code}`,
-    timestamp: Date.now(),
+    externalUserId: `wx_bound_${ts}`,
+    externalNickname: "Owner WeChat",
   });
-  check("bind claim accepted", claim.body.accepted === true);
-  const { confirmWeChatBinding } = await import("../src/server/wechatBinding.ts");
-  const binding = await confirmWeChatBinding(ownerId, minted.code);
+  check("login event accepted", login.body.accepted === true);
+  const { getWeChatBinding } = await import("../src/server/wechatBinding.ts");
+  const binding = await getWeChatBinding(ownerId);
   check("confirmed binding stores external id", binding.externalUserId === `wx_bound_${ts}`);
 
   console.log("\n[3] bound user can route an explicit role command");

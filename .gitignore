@@ -20,3 +20,9 @@ _vendor/
 
 # screenshots / browser-verification captures — local only
 .shots/
+
+# agent
+.agent
+.agents
+.codex
+.comet

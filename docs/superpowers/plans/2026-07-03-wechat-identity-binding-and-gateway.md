@@ -1,5 +1,7 @@
 # WeChat Identity Binding and Gateway Implementation Plan
 
+> Superseded binding detail: the implemented product path now uses local personal-WeChat QR scan sessions (`POST /api/auth/wechat-sessions` + `/api/integrations/wechat/session-events`) instead of manually copied binding codes. Historical task snippets below may still mention the earlier code-based draft.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a logged-in open-tag user bind a personal WeChat identity through a one-time web code, then use that binding to route personal WeChat bot traffic into open-tag's `#all` channel and task flow.

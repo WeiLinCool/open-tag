@@ -17,6 +17,7 @@ import { sendJson, sendErr } from "./util.js";
 import { createLogger } from "../log.js";
 import { shouldServeAppShell } from "./staticRoutes.js";
 import { handleWeChatWebhook } from "./wechatGateway.js";
+import { startOpenClawWeixinBridge } from "./wechatOpenClawBridge.js";
 
 // ── Security headers (helmet) ────────────────────────────────────────────────
 // CSP, COEP, and CORP are disabled here: the Vite-built frontend uses inline
@@ -148,4 +149,5 @@ reconcileCounters()
   .finally(() => server.listen(PORT, () => {
     log.info("control plane up", { url: `http://localhost:${PORT}`, logs: "~/.open-tag/logs/" });
     startMachineSweeper(); // backstop: offline machines whose daemon died without a clean WS close
+    startOpenClawWeixinBridge(); // OpenClaw QR login credentials -> WeChat messages -> open-tag #all
   }));

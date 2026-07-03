@@ -296,11 +296,11 @@ function PermissionsTab({ id }: { id: string }) {
       </div>
       {Object.entries(groups).map(([g, list]) => (
         <div key={g} className="perm-group">
-          <div className="sec sec-sub">{g}</div>
+          <div className="sec sec-sub">{t(g)}</div>
           {list.map((s: any) => (
             <label key={s.key} className="perm-row">
               <input type="checkbox" checked={granted.has(s.key)} onChange={() => toggle(s.key)} />
-              <span className="grow"><span className="who">{s.label}</span> <code className="perm-key">{s.key}</code><div className="meta">{s.description}</div></span>
+              <span className="grow"><span className="who">{t(s.label)}</span> <code className="perm-key">{s.key}</code><div className="meta">{t(s.description)}</div></span>
             </label>
           ))}
         </div>

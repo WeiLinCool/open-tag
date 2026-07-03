@@ -4,7 +4,7 @@ open-tag already has the core primitives needed for collaboration: channels, tas
 
 This change is intentionally an MVP. It targets one external surface, one public channel (`#all`), and explicit role tags for routing. That keeps the first integration small while preserving the adapter pattern needed for later platforms such as Feishu.
 
-This change now also includes the prerequisite identity-binding slice needed for a personal WeChat bot: a logged-in open-tag user can generate a one-time binding code from account settings, send it to the personal WeChat bot so the bot can claim it with the native WeChat user id, then confirm it through the web UI before the gateway starts routing task traffic.
+This change targets a bot endpoint integration: ClawBot/OpenClaw owns the personal-WeChat scan login and session maintenance, while open-tag exposes a token-gated backend endpoint that receives bot messages and returns queued replies. open-tag does not directly log in to, store, or operate a personal WeChat account.
 
 ## Goals / Non-Goals
 
@@ -13,8 +13,8 @@ This change now also includes the prerequisite identity-binding slice needed for
 - Parse explicit `#角色` instructions and route them into existing open-tag agent/task flows.
 - Return short status updates and final outcomes back to WeChat.
 - Keep WeChat concerns isolated in an adapter layer.
-- Let a logged-in open-tag user bind a personal WeChat identity through a one-time code generated in account settings.
-- Make the binding one-time, short-lived, and user-scoped so the gateway can later resolve WeChat traffic to the correct open-tag user.
+- Expose a ClawBot/OpenClaw-compatible gateway surface (`sendmessage` inbound, `getupdates` outbound).
+- Show the gateway endpoint in account settings so operators can connect their bot channel.
 
 **Non-Goals:**
 - Multi-bot tenancy and per-room mapping.
@@ -41,9 +41,9 @@ This change now also includes the prerequisite identity-binding slice needed for
    - The gateway emits only a small set of progress messages: received, in progress, done, failure.
    - Alternative: mirror every internal state transition. Rejected because that would create noise in a high-exposure chat surface.
 
-5. **Bind WeChat through a web-generated one-time code**
-   - The account settings page generates a short-lived code for the current open-tag user. The user sends that code to the personal WeChat bot; the bot claims the code with its native WeChat `userId`; the user then enters the same code in the web UI so the binding lands in open-tag's auth model.
-   - Alternative: create the binding entirely inside chat. Rejected because it makes the auth flow depend on bot session state and complicates later platform parity.
+5. **Let ClawBot/OpenClaw own WeChat login**
+   - Account settings exposes the open-tag gateway endpoint. ClawBot/OpenClaw performs WeChat扫码登录 and posts text messages to `sendmessage`; it polls `getupdates` for status/result text to send back to WeChat.
+   - Alternative: have open-tag start its own personal-WeChat SDK session. Rejected because it conflates open-tag core with a specific WeChat SDK and still does not model ClawBot as the actual conversational endpoint.
 
 ## Risks / Trade-offs
 
@@ -51,15 +51,15 @@ This change now also includes the prerequisite identity-binding slice needed for
 - [Risk] `#all` can become noisy if bot traffic is high → Mitigation: restrict the MVP to explicit commands and minimal status updates.
 - [Risk] Role parsing may not match the eventual open-tag routing taxonomy → Mitigation: make the gateway forward the parsed role as a stable internal field instead of hardcoding bot-specific logic in core.
 - [Risk] Result payloads may be too large for WeChat → Mitigation: send short summaries and links, not full raw artifacts, when the output is long.
-- [Risk] A one-time binding code can be intercepted or reused → Mitigation: make the code short-lived, single-use, and bound to the current logged-in user.
-- [Risk] A bound WeChat identity may need to be revoked or re-bound later → Mitigation: support explicit unlinking instead of silent overwrite in the first slice.
+- [Risk] ClawBot/OpenClaw endpoint details may differ by version → Mitigation: keep the gateway payload parser narrow, text-first, and documented in `docs/wechat-adapter.md`.
+- [Risk] Multiple bot accounts need isolation later → Mitigation: keep room/session ids on inbound/outbound messages even though MVP targets `#all`.
 
 ## Migration Plan
 
-1. Add the account-setting binding flow and persist the WeChat-to-user link.
-2. Add the gateway layer behind a narrow internal contract.
-3. Wire inbound WeChat messages to the `#all` channel path and resolve them through the bound user.
-4. Wire outbound task status/result messages back to the bot.
+1. Add the gateway layer behind a narrow ClawBot/OpenClaw contract.
+2. Wire inbound WeChat bot messages to the `#all` channel path.
+3. Wire outbound task status/result messages into a pollable `getupdates` response.
+4. Show the connection endpoint in settings.
 5. Verify the loop in a local/dev environment before exposing it to real traffic.
 
 Rollback:
@@ -68,7 +68,7 @@ Rollback:
 
 ## Open Questions
 
-- Which WeChat bot framework will be used for the first implementation.
+- Which concrete ClawBot/OpenClaw deployment will call the open-tag gateway first.
 - Whether the bot should send plain text only or also support attachments in a later slice.
 - Whether status messages should be posted into `#all` only or also echoed in a dedicated operator channel.
 - Whether unlink should be available to the user directly in settings or only to admins.

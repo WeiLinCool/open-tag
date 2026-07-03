@@ -7,6 +7,9 @@ try { (process as { loadEnvFile?: (p?: string) => void }).loadEnvFile?.("../.env
 const API = `http://localhost:${process.env.PORT ?? 7777}`;
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __OPEN_TAG_API_ORIGIN__: JSON.stringify(API),
+  },
   server: {
     port: Number(process.env.VITE_PORT ?? 5273),
     proxy: {
