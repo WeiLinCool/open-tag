@@ -5,6 +5,7 @@ import {
     useState,
     type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
@@ -58,6 +59,7 @@ import { ChatSidebar, CreateChannelModal } from "./ChatSidebar.tsx";
 import { ConnectComputerWizard } from "./ConnectComputerWizard.tsx";
 import { Composer } from "./Composer.tsx";
 import { useConfirm, useEscClose } from "../ConfirmModal.tsx";
+import { HtmlRenderer } from "../components/HtmlRenderer.tsx";
 
 const fmtSize = (n?: number) =>
     !n
@@ -69,11 +71,83 @@ const fmtSize = (n?: number) =>
             : (n / 1048576).toFixed(1) + " MB";
 const isImage = (m?: string) => !!m && m.startsWith("image/");
 const isVideo = (m?: string) => !!m && m.startsWith("video/");
+const isHtmlAttachment = (a: Att) =>
+    a.mimeType === "text/html" || /\.html?$/i.test(a.filename);
+
+function HtmlAttachmentPreview({
+    filename,
+    html,
+    error,
+    onClose,
+}: {
+    filename: string;
+    html: string;
+    error: string;
+    onClose: () => void;
+}) {
+    useEscClose(onClose);
+    return createPortal(
+        <div
+            className="modal-bg ws-preview-bg"
+            role="dialog"
+            aria-modal="true"
+            aria-label={i18n.t("members.workspacePreviewDialog")}
+            onClick={onClose}
+        >
+            <div
+                className="ws-preview-modal"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="ws-preview-head">
+                    <div className="ws-preview-title" title={filename}>
+                        <span className="ws-path-text">{filename}</span>
+                    </div>
+                    <button
+                        className="ws-preview-close"
+                        onClick={onClose}
+                        aria-label={i18n.t("chat.close")}
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+                <div className="ws-preview-body">
+                    {error ? (
+                        <div className="empty">{error}</div>
+                    ) : html ? (
+                        <div className="ws-html ws-html-large">
+                            <HtmlRenderer html={html} trustLevel="untrusted" minHeight="100%" />
+                        </div>
+                    ) : (
+                        <div className="empty">{i18n.t("common.loading")}</div>
+                    )}
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
 
 // Message attachments: images shown inline with lightbox, videos shown with inline player; other files shown as a file card. Videos that fail to play fall back to a download card.
 function AttCard({ a, url }: { a: Att; url: string }) {
     const [lb, setLb] = useState(false);
     const [vErr, setVErr] = useState(false);
+    const [htmlPreview, setHtmlPreview] = useState<{
+        html: string;
+        error: string;
+    } | null>(null);
+    const openHtmlPreview = async () => {
+        setHtmlPreview({ html: "", error: "" });
+        try {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`${r.status} ${r.statusText}`.trim());
+            setHtmlPreview({ html: await r.text(), error: "" });
+        } catch (e: any) {
+            setHtmlPreview({
+                html: "",
+                error: e?.message || i18n.t("chat.attachmentPreviewFailed"),
+            });
+        }
+    };
     if (isImage(a.mimeType))
         return (
             <>
@@ -104,6 +178,29 @@ function AttCard({ a, url }: { a: Att; url: string }) {
                 title={a.filename}
                 onError={() => setVErr(true)}
             />
+        );
+    if (isHtmlAttachment(a))
+        return (
+            <>
+                <button
+                    className="msg-att"
+                    type="button"
+                    title={a.filename}
+                    onClick={openHtmlPreview}
+                >
+                    <IconFile size={14} />
+                    <span className="grow">{a.filename}</span>
+                    <span className="asz">{fmtSize(a.sizeBytes)}</span>
+                </button>
+                {htmlPreview && (
+                    <HtmlAttachmentPreview
+                        filename={a.filename}
+                        html={htmlPreview.html}
+                        error={htmlPreview.error}
+                        onClose={() => setHtmlPreview(null)}
+                    />
+                )}
+            </>
         );
     return (
         <a className="msg-att" href={url} target="_blank" rel="noreferrer">

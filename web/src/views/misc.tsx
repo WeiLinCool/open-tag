@@ -361,17 +361,24 @@ function AccountSettings({ api }: { api: any }) {
   const { t, i18n } = useTranslation();
   const wechatGatewayPath = "/api/integrations/wechat/openclaw";
   const wechatGatewayEndpoint = `${__OPEN_TAG_API_ORIGIN__}${wechatGatewayPath}`;
+  const feishuGatewayPath = "/api/integrations/feishu/webhook";
+  const feishuGatewayEndpoint = `${__OPEN_TAG_API_ORIGIN__}${feishuGatewayPath}`;
   const setLang = (l: string) => { i18n.changeLanguage(l); localStorage.setItem("open-tag.lang", l); };
   const [u, setU] = useState<any>(null);
   const [wechat, setWechat] = useState<any>(null);
   const [wechatLogin, setWechatLogin] = useState<any>(null);
   const [wechatMsg, setWechatMsg] = useState("");
   const [wechatBusy, setWechatBusy] = useState(false);
+  const [feishu, setFeishu] = useState<any>(null);
+  const [feishuMsg, setFeishuMsg] = useState("");
+  const [feishuBusy, setFeishuBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => { (async () => {
     setU(await api("GET", "/api/auth/me"));
     const b = await api("GET", "/api/auth/wechat-binding").catch(() => ({ binding: null }));
     setWechat(b?.binding ?? null);
+    const f = await api("GET", "/api/auth/feishu-binding").catch(() => ({ binding: null }));
+    setFeishu(f?.binding ?? null);
   })(); }, []);
   useEffect(() => {
     if (!wechatLogin?.id || ["confirmed", "failed"].includes(wechatLogin.status)) return;
@@ -407,6 +414,30 @@ function AccountSettings({ api }: { api: any }) {
       setWechatMsg(String(e?.message || e));
     } finally { setWechatBusy(false); }
   };
+  const linkFeishu = async () => {
+    setFeishuBusy(true); setFeishuMsg("");
+    try {
+      const r = await api("POST", "/api/auth/feishu-binding", {
+        externalUserId: u.email,
+        externalRoomId: "personal",
+        botId: "feishu-personal",
+      });
+      setFeishu(r.binding ?? null);
+      setFeishuMsg(t("misc.feishuBindingConnected", { endpoint: feishuGatewayEndpoint }));
+    } catch (e: any) {
+      setFeishuMsg(String(e?.message || e));
+    } finally { setFeishuBusy(false); }
+  };
+  const unlinkFeishu = async () => {
+    setFeishuBusy(true); setFeishuMsg("");
+    try {
+      await api("DELETE", "/api/auth/feishu-binding");
+      setFeishu(null);
+      setFeishuMsg(t("misc.feishuBindingUnlinked"));
+    } catch (e: any) {
+      setFeishuMsg(String(e?.message || e));
+    } finally { setFeishuBusy(false); }
+  };
   return (
     <div className="setform">
       <label>{t("misc.accountDisplayName")}</label><input value={u.displayName || ""} onChange={(e) => setU({ ...u, displayName: e.target.value })} />
@@ -429,6 +460,19 @@ function AccountSettings({ api }: { api: any }) {
           {wechatMsg && !wechatLoginConfirmed && <div className="kv">{wechatMsg}</div>}
         </div>
         <button className={wechat ? "logout-btn" : "ghost"} disabled={wechatBusy} onClick={wechat ? unlinkWechat : startWechatGatewayLogin}>{wechat ? t("misc.wechatBindingUnlink") : t("misc.wechatBindingConnect")}</button>
+      </div>
+      <div className="logout-row">
+        <div>
+          <div className="logout-title">{t("misc.feishuBindingTitle")}</div>
+          <div className="logout-desc">{feishu ? t("misc.feishuBindingBoundDesc", { id: feishu.externalNickname || feishu.externalUserId }) : t("misc.feishuBindingDesc")}</div>
+          {feishu && <div style={{ marginTop: 10, display: "grid", gap: 8, maxWidth: 420 }}>
+            <div className="kv"><b>{t("misc.feishuBindingSessionLabel")}</b> {t("misc.feishuBindingConnectedState")}</div>
+            <div className="kv">{t("misc.feishuBindingConnected", { endpoint: feishuGatewayEndpoint })}</div>
+          </div>}
+          {!feishu && feishuMsg && <div className="kv">{feishuMsg}</div>}
+          {feishu && feishuMsg && <div className="kv">{feishuMsg}</div>}
+        </div>
+        <button className={feishu ? "logout-btn" : "ghost"} disabled={feishuBusy} onClick={feishu ? unlinkFeishu : linkFeishu}>{feishu ? t("misc.feishuBindingUnlink") : t("misc.feishuBindingConnect")}</button>
       </div>
       <div className="lang-row">
         <div><div className="logout-title">{t("settings.language")}</div><div className="logout-desc">{t("settings.languageDesc")}</div></div>

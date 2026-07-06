@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 const HOME = mkdtempSync(path.join(tmpdir(), "ot-ws-root-"));
 process.env.OPEN_TAG_HOME = HOME;
 
-const { listWorkspace } = await import("../src/daemon/workspace.ts");
+const { listWorkspace, readWorkspaceFile } = await import("../src/daemon/workspace.ts");
 
 test("listWorkspace returns the absolute workspace root + the file tree", async () => {
   const agentId = "11111111-1111-4111-8111-111111111111";
@@ -32,4 +32,20 @@ test("listWorkspace returns root even when the agent dir is missing — root is 
 
   assert.equal(r.root, path.join(HOME, "agents", agentId));
   assert.ok(!r.error, "missing dir → empty tree, not an error (walk tolerates readdir failure)");
+});
+
+test("readWorkspaceFile allows large HTML reports while keeping ordinary large text capped", async () => {
+  const agentId = "33333333-3333-4333-8333-333333333333";
+  const agentDir = path.join(HOME, "agents", agentId);
+  mkdirSync(agentDir, { recursive: true });
+  const largeBody = "x".repeat(300 * 1024);
+  writeFileSync(path.join(agentDir, "report.html"), `<!doctype html><html><body>${largeBody}</body></html>`);
+  writeFileSync(path.join(agentDir, "notes.txt"), largeBody);
+
+  const html = await readWorkspaceFile(agentId, "report.html");
+  assert.equal(html.path, "report.html");
+  assert.match(html.content!, /<!doctype html>/);
+
+  const txt = await readWorkspaceFile(agentId, "notes.txt");
+  assert.match(txt.error!, /file too large/);
 });

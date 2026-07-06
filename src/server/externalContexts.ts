@@ -76,6 +76,14 @@ export async function findExternalDeliveryContextByThread(threadChannelId: strin
   return findExternalDeliveryContextByMessage(thread.parentMessageId);
 }
 
+export async function findExternalDeliveryContextByConversation(platform: string, externalConversationId: string): Promise<ExternalDeliveryContext | null> {
+  const row = (await db.select().from(schema.externalDeliveryContexts).where(and(
+    eq(schema.externalDeliveryContexts.platform, platform),
+    eq(schema.externalDeliveryContexts.externalConversationId, externalConversationId),
+  )).orderBy(schema.externalDeliveryContexts.createdAt).limit(1))[0];
+  return row ?? null;
+}
+
 export async function markExternalDeliveryDone(messageId: string): Promise<void> {
   await db.update(schema.externalDeliveryContexts).set({ status: "done", updatedAt: new Date() }).where(or(
     eq(schema.externalDeliveryContexts.sourceMessageId, messageId),

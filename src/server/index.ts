@@ -17,6 +17,7 @@ import { sendJson, sendErr } from "./util.js";
 import { createLogger } from "../log.js";
 import { shouldServeAppShell } from "./staticRoutes.js";
 import { handleWeChatWebhook } from "./wechatGateway.js";
+import { handleFeishuWebhook } from "./feishuGateway.js";
 import { startOpenClawWeixinBridge } from "./wechatOpenClawBridge.js";
 
 // ── Security headers (helmet) ────────────────────────────────────────────────
@@ -117,6 +118,7 @@ const server = http.createServer(async (req, res) => {
   const t0 = Date.now();
   res.on("finish", () => log.debug("req", { method, path: url.pathname, status: res.statusCode, ms: Date.now() - t0 }));
   try {
+    if (await handleFeishuWebhook(req, res, url, method)) return;
     if (url.pathname === "/health") return sendJson(res, 200, { ok: true, service: "open-tag", time: new Date().toISOString() });
     if (await handleWeChatWebhook(req, res, url, method)) return;
     if (await handleAgentApi(req, res, url, method)) return;

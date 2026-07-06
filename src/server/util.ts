@@ -14,6 +14,13 @@ export async function readJson<T = any>(req: IncomingMessage): Promise<T> {
     req.on("end", () => { try { resolve((d ? JSON.parse(d) : {}) as T); } catch { resolve({} as T); } });
   });
 }
+export async function readText(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let d = "";
+    req.on("data", (c) => (d += String(c)));
+    req.on("end", () => resolve(d));
+  });
+}
 function header(req: IncomingMessage, name: string): string | null {
   const h = req.headers[name];
   return Array.isArray(h) ? (h[0] ?? null) : (h ?? null);

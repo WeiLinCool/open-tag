@@ -8,7 +8,9 @@ import { agentsDir } from "../paths.js";
 
 const DATA_DIR = agentsDir();
 const MAX_FILE = 256 * 1024;
+const MAX_HTML_FILE = 5 * 1024 * 1024;
 const SKIP = new Set(["node_modules", ".git"]);
+const isHtmlPath = (rel: string) => /\.html?$/i.test(rel);
 
 function safe(agentId: string, rel: string): string | null {
   const root = path.join(DATA_DIR, agentId);
@@ -122,7 +124,8 @@ export async function readWorkspaceFile(agentId: string, rel: string) {
   try {
     const s = await stat(file);
     if (!s.isFile()) return { error: "not a file" };
-    if (s.size > MAX_FILE) return { error: `file too large (${s.size} bytes, max ${MAX_FILE})` };
+    const maxFile = isHtmlPath(rel) ? MAX_HTML_FILE : MAX_FILE;
+    if (s.size > maxFile) return { error: `file too large (${s.size} bytes, max ${maxFile})` };
     const buf = await readFile(file);
     if (buf.includes(0)) return { error: "binary file" };
     return { path: rel, content: buf.toString("utf8") };

@@ -8,6 +8,11 @@ import { REGISTER_RATE_LIMIT, REGISTER_RATE_WINDOW_MS, clientIp, rateLimit } fro
 import { readJson, sendErr, sendJson } from "../util.js";
 import { createOpenClawLoginSession, getOpenClawLoginSession, serializeOpenClawLoginSession } from "../wechatOpenClawLogin.js";
 import {
+  bindFeishuFromAuth,
+  getFeishuBinding,
+  unlinkFeishuBinding as unlinkFeishuExternalBinding,
+} from "../feishuGateway.js";
+import {
   createWeChatLoginSession,
   getWeChatBinding,
   getWeChatLoginSessionForUser,
@@ -145,6 +150,15 @@ export async function handleAuthedAuth(ctx: UserCtx): Promise<boolean> {
     const binding = await getWeChatBinding(userId);
     return (sendJson(res, 200, { binding: serializeWeChatBinding(binding) }), true);
   }
+  if (p === "/api/auth/feishu-binding" && method === "GET") {
+    const binding = await getFeishuBinding(userId);
+    return (sendJson(res, 200, { binding }), true);
+  }
+  if (p === "/api/auth/feishu-binding" && method === "POST") {
+    const body = await readJson(req);
+    const binding = await bindFeishuFromAuth(userId, body);
+    return (sendJson(res, 200, { binding }), true);
+  }
   if (p === "/api/auth/wechat-openclaw-login" && method === "POST") {
     try {
       const session = await createOpenClawLoginSession(userId);
@@ -176,6 +190,10 @@ export async function handleAuthedAuth(ctx: UserCtx): Promise<boolean> {
   }
   if (p === "/api/auth/wechat-binding" && method === "DELETE") {
     const binding = await unlinkWeChatBinding(userId);
+    return (sendJson(res, 200, { ok: true, unlinked: !!binding }), true);
+  }
+  if (p === "/api/auth/feishu-binding" && method === "DELETE") {
+    const binding = await unlinkFeishuExternalBinding(userId);
     return (sendJson(res, 200, { ok: true, unlinked: !!binding }), true);
   }
   return false;
